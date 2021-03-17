@@ -191,6 +191,7 @@ function ValueNameCell({ rowData, dataKey, currentKey, ...props }) {
   let color = 'var(--vscode-charts-orange)';
   switch (rowData['type']) {
     case 'REG_DWORD':
+    case 'REG_QWORD':
       icon = faCalculator;
       color = 'var(--vscode-charts-green)';
       break;
@@ -249,7 +250,7 @@ function ValueNameCell({ rowData, dataKey, currentKey, ...props }) {
               setEditingValue(null);
             }
           }}
-          placeholder='Name'
+          placeholder={t('valuesList.columnNames.name')}
           onBlur={() => {
             setEditingValue(null);
             applyRename();
@@ -305,6 +306,8 @@ function ValueNameCell({ rowData, dataKey, currentKey, ...props }) {
 }
 
 function ValueDataCell({ rowData, dataKey, currentKey, ...props }) {
+  const { t } = useTranslation();
+
   const [editingData, setEditingData] = useState(null);
 
   const applySetData = () => {
@@ -336,7 +339,7 @@ function ValueDataCell({ rowData, dataKey, currentKey, ...props }) {
               setEditingData(null);
             }
           }}
-          placeholder='Value'
+          placeholder={t('valuesList.columnNames.value')}
           onBlur={() => {
             setEditingData(null);
             applySetData();
