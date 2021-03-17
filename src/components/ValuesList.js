@@ -223,6 +223,8 @@ function ValueNameCell({ rowData, dataKey, currentKey, ...props }) {
 
   const [deleteConfitmationOpen, setDeleteConfitmationOpen] = useState(false);
 
+  const valueName = rowData[dataKey] || t('valuesList.defaultName');
+
   return (
     <CustomTableCell {...props}
       onClick={() => setEditingValue(rowData[dataKey])}
@@ -255,7 +257,7 @@ function ValueNameCell({ rowData, dataKey, currentKey, ...props }) {
         />
         :
         <CustomTableCellText>
-          {rowData[dataKey] || t('valuesList.defaultName')}
+          {valueName}
         </CustomTableCellText>
       }
 
@@ -274,7 +276,7 @@ function ValueNameCell({ rowData, dataKey, currentKey, ...props }) {
           {t('valuesList.confirmDeleteValueModal.title')}
         </Modal.Title>
         <Modal.Body>
-          {t('valuesList.confirmDeleteValueModal.text', { value: rowData[dataKey] })}
+          {t('valuesList.confirmDeleteValueModal.text', { value: valueName })}
         </Modal.Body>
         <Modal.Footer>
           <Button
