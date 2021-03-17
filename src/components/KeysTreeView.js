@@ -163,25 +163,66 @@ const initialData = () => [
   }
 ];
 
-function KeysTreeNode(props) {
+function KeysTreeNode({ nodeLabel, nodeRegKey, nodeIsSelected, ...props }) {
   const { t } = useTranslation();
+
+  const [editingValue, setEditingValue] = useState(null);
+
+  const applyRename = () => {
+    const oldName = nodeLabel;
+    const newName = editingValue;
+    if (newName !== '' && newName !== oldName) {
+      VsCodeApi.postMessage({
+        command: 'renameKey',
+        key: nodeRegKey,
+        newSubKey: newName
+      });
+    }
+  };
 
   const [deleteConfitmationOpen, setDeleteConfitmationOpen] = useState(false);
 
   return (
     <div
+      onClick={() => {
+        if (nodeIsSelected && nodeRegKey.includes('\\')) {
+          setEditingValue(nodeLabel);
+        }
+      }}
       onMouseDown={event => {
         if (event.button === 1) {
           // Middle click.
           // Only allow to remove non-root subkeys.
-          if (props.nodeRegKey.includes('\\')) {
+          if (nodeRegKey.includes('\\')) {
             setDeleteConfitmationOpen(true);
             event.preventDefault();
           }
         }
       }}
     >
-      {props.children}
+      {editingValue !== null ?
+        <Input
+          size='xs'
+          autoFocus
+          value={editingValue}
+          onChange={value => setEditingValue(value)}
+          onKeyDown={event => {
+            if (event.key === 'Enter') {
+              setEditingValue(null);
+              applyRename();
+            } else if (event.key === 'Escape') {
+              setEditingValue(null);
+            }
+          }}
+          placeholder={t('keysTreeView.keyName')}
+          onBlur={() => {
+            setEditingValue(null);
+            applyRename();
+          }}
+        />
+        :
+        props.children
+      }
 
       <Modal
         backdrop={true}
@@ -198,14 +239,14 @@ function KeysTreeNode(props) {
           {t('keysTreeView.confirmDeleteKeyModal.title')}
         </Modal.Title>
         <Modal.Body>
-          {t('keysTreeView.confirmDeleteKeyModal.text', { key: props.nodeLabel })}
+          {t('keysTreeView.confirmDeleteKeyModal.text', { key: nodeLabel })}
         </Modal.Body>
         <Modal.Footer>
           <Button
             onClick={() => {
               VsCodeApi.postMessage({
                 command: 'deleteKey',
-                key: props.nodeRegKey
+                key: nodeRegKey
               });
               setDeleteConfitmationOpen(false);
             }}
@@ -255,7 +296,7 @@ function KeysTreeView() {
     setData(newData);
     setTreeValue(message.retrievedKey);
     setTreeKey(treeKey + 1); // a hack to remount the element
-  }, [t, treeKey]);
+  }, [treeKey]);
 
   const onSetSubKeys = useCallback(message => {
     if (!pendingPromise) {
@@ -317,6 +358,48 @@ function KeysTreeView() {
     setData(newData);
   }, [data]);
 
+  const onRenameKeyDone = useCallback(message => {
+    const oldKey = message.key;
+    const newSubKey = message.newSubKey;
+    const newKey = oldKey.replace(/\\[^\\]+$/, '\\' + newSubKey);
+
+    if (treeValue === oldKey || treeValue.startsWith(oldKey + '\\')) {
+      setTreeValue(newKey);
+      VsCodeApi.postMessage({
+        command: 'getKeyValues',
+        key: newKey
+      });
+    }
+
+    const copyRecursiveWithRename = dataToCopy => {
+      let newData = [];
+      for (const item of dataToCopy) {
+        if (item.value === oldKey) {
+          newData.push(Object.assign({}, item, {
+            label: newSubKey,
+            value: newKey,
+            children: []
+          }));
+          continue;
+        }
+
+        if (item.value === '' || oldKey.startsWith(item.value + '\\')) {
+          newData.push(Object.assign({}, item, {
+            children: copyRecursiveWithRename(item.children)
+          }));
+          continue;
+        }
+
+        newData.push(item);
+      }
+
+      return newData;
+    };
+
+    const newData = copyRecursiveWithRename(data);
+    setData(newData);
+  }, [data, treeValue]);
+
   const onDeleteKeyDone = useCallback(message => {
     const deletedKey = message.key;
 
@@ -368,6 +451,10 @@ function KeysTreeView() {
         onCreateKeyDone(message);
         break;
 
+      case 'renameKeyDone':
+        onRenameKeyDone(message);
+        break;
+
       case 'deleteKeyDone':
         onDeleteKeyDone(message);
         break;
@@ -375,7 +462,7 @@ function KeysTreeView() {
       default:
         break;
     }
-  }, [onSetKeyTreeAndValues, onSetSubKeys, onCreateKeyDone, onDeleteKeyDone]);
+  }, [onSetKeyTreeAndValues, onSetSubKeys, onCreateKeyDone, onRenameKeyDone, onDeleteKeyDone]);
 
   useEvent('message', onMessage);
 
@@ -399,7 +486,11 @@ function KeysTreeView() {
               height={height}
               style={{ maxHeight: height, width: width }}
               renderTreeNode={nodeData => (
-                <KeysTreeNode nodeLabel={nodeData.label} nodeRegKey={nodeData.value}>
+                <KeysTreeNode
+                  nodeLabel={nodeData.label}
+                  nodeRegKey={nodeData.value}
+                  nodeIsSelected={nodeData.value !== '' && nodeData.value === treeValue}
+                >
                   {nodeData.value === '' ? t('keysTreeView.computer') : nodeData.label}
                 </KeysTreeNode>
               )}
