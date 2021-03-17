@@ -27,7 +27,7 @@ function NewValueIconButton(props) {
   const [newValueType, setNewValueType] = useState('');
   const [newValueData, setNewValueData] = useState('');
 
-  const isValidValueData = () => newValueName !== '' && newValueType !== '';
+  const isValidValueData = () => newValueType !== '';
 
   const postCreateValue = () => {
     VsCodeApi.postMessage({
