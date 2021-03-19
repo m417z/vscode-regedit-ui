@@ -275,13 +275,11 @@ function KeysTreeView() {
 
   const [treeValue, setTreeValue] = useState('');
 
-  const [pendingPromise, setPendingPromise] = useState(null);
-
   const onSetKeyTreeAndValues = useCallback(message => {
     const mapData = (data, prefix = '') => data.map(item => ({
       label: item.name,
       value: prefix + item.name,
-      children: mapData(item.children, prefix + item.name + '\\')
+      children: item.children && mapData(item.children, prefix + item.name + '\\')
     }));
 
     let newData = initialData();
@@ -299,28 +297,39 @@ function KeysTreeView() {
   }, [treeKey]);
 
   const onSetSubKeys = useCallback(message => {
-    if (!pendingPromise) {
-      throw new Error(`Got unexpected data for ${message.key}`);
-    }
+    const targetKey = message.key;
+    const subData = message.subKeys.length === 0 ? undefined : message.subKeys.map(item => ({
+      label: item,
+      value: targetKey + '\\' + item,
+      children: []
+    }));
 
-    if (message.key !== pendingPromise.key) {
-      throw new Error(`Expected data for ${pendingPromise.key}, got data for ${message.key}`);
-    }
+    const copyRecursiveWithSubKeys = dataToCopy => {
+      let newData = [];
+      for (const item of dataToCopy) {
+        if (item.value === targetKey) {
+          newData.push(Object.assign({}, item, {
+            children: subData
+          }));
+          continue;
+        }
 
-    if (message.subKeys.length > 0) {
-      const subData = message.subKeys.map(item => ({
-        label: item,
-        value: message.key + '\\' + item,
-        children: []
-      }));
+        if (item.value === '' || targetKey.startsWith(item.value + '\\')) {
+          newData.push(Object.assign({}, item, {
+            children: item.children && copyRecursiveWithSubKeys(item.children)
+          }));
+          continue;
+        }
 
-      pendingPromise.resolve(subData);
-    } else {
-      pendingPromise.resolve();
-    }
+        newData.push(item);
+      }
 
-    setPendingPromise(null);
-  }, [pendingPromise]);
+      return newData;
+    };
+
+    const newData = copyRecursiveWithSubKeys(data);
+    setData(newData);
+  }, [data]);
 
   const onCreateKeyDone = useCallback(message => {
     const createdKey = message.key;
@@ -328,7 +337,7 @@ function KeysTreeView() {
     const copyRecursiveWithAdded = (dataToCopy, iterKey = '') => {
       let newData = [];
       let foundNext = false;
-      for (const item of dataToCopy) {
+      for (const item of dataToCopy || []) {
         if (item.value === createdKey) {
           foundNext = true;
         } else if (item.value === '' || createdKey.startsWith(item.value + '\\')) {
@@ -342,12 +351,12 @@ function KeysTreeView() {
         newData.push(item);
       }
 
-      if (!foundNext && iterKey !== '') {
+      if (!foundNext && iterKey !== '' && (dataToCopy === undefined || dataToCopy.length > 0)) {
         const newValue = createdKey.slice((iterKey + '\\').length).replace(/\\.*$/, '');
         newData.push({
           label: newValue,
           value: iterKey + '\\' + newValue,
-          children: []
+          children: undefined
         });
       }
 
@@ -374,18 +383,18 @@ function KeysTreeView() {
     const copyRecursiveWithRename = dataToCopy => {
       let newData = [];
       for (const item of dataToCopy) {
-        if (item.value === oldKey) {
+        if (item.value === oldKey || item.value.startsWith(oldKey + '\\')) {
           newData.push(Object.assign({}, item, {
-            label: newSubKey,
-            value: newKey,
-            children: []
+            label: item.value === oldKey ? newSubKey : item.label,
+            value: newKey + item.value.slice(oldKey.length),
+            children: item.children && copyRecursiveWithRename(item.children)
           }));
           continue;
         }
 
         if (item.value === '' || oldKey.startsWith(item.value + '\\')) {
           newData.push(Object.assign({}, item, {
-            children: copyRecursiveWithRename(item.children)
+            children: item.children && copyRecursiveWithRename(item.children)
           }));
           continue;
         }
@@ -421,7 +430,7 @@ function KeysTreeView() {
 
         if (item.value === '' || deletedKey.startsWith(item.value + '\\')) {
           newData.push(Object.assign({}, item, {
-            children: copyRecursiveWithoutDeleted(item.children)
+            children: item.children && copyRecursiveWithoutDeleted(item.children)
           }));
           continue;
         }
@@ -429,7 +438,7 @@ function KeysTreeView() {
         newData.push(item);
       }
 
-      return newData;
+      return newData.length > 0 ? newData : undefined;
     };
 
     const newData = copyRecursiveWithoutDeleted(data);
@@ -494,25 +503,26 @@ function KeysTreeView() {
                   {nodeData.value === '' ? t('keysTreeView.computer') : nodeData.label}
                 </KeysTreeNode>
               )}
-              getChildren={activeNode =>
-                new Promise(resolve => {
-                  const key = activeNode.value;
+              onExpand={(expandItemValues, activeNode) => {
+                if (activeNode.children && activeNode.children.length === 0) {
                   VsCodeApi.postMessage({
                     command: 'getSubKeys',
-                    key
+                    key: activeNode.value
                   });
-                  setPendingPromise({
-                    key,
-                    resolve
-                  });
-                })
-              }
+                }
+              }}
               onSelect={(activeNode, value) => {
                 if (value !== '' && value !== treeValue) {
                   setTreeValue(value);
                   VsCodeApi.postMessage({
                     command: 'getKeyValues',
                     key: value
+                  });
+                }
+                if (activeNode.children && activeNode.children.length === 0) {
+                  VsCodeApi.postMessage({
+                    command: 'getSubKeys',
+                    key: activeNode.value
                   });
                 }
               }}
