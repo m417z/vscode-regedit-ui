@@ -19,7 +19,7 @@
     "react-split": "^2.0.9",
     "react-use": "^15.3.4",
     "react-virtualized-auto-sizer": "^1.0.3",
-    "rsuite": "^5.0.0-alpha.1",
+    "rsuite": "^5.0.0-alpha.5",
     "styled-components": "^5.2.1",
     "web-vitals": "^0.2.4"
   },
